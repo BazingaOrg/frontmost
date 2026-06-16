@@ -1,0 +1,19 @@
+{
+  "name": "frontmost",
+  "version": "0.1.0",
+  "description": "A live now using badge for your Mac.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "check": "npm test && npm run check:syntax && wrangler deploy --dry-run",
+    "check:syntax": "node --check src/index.js && node --check src/http.js && node --check src/presence.js && node --check src/widget-source.js && node -e \"import('./src/widget-source.js').then(({ WIDGET_JS }) => new Function(WIDGET_JS))\"",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "dev:widget": "node -e \"import('./src/widget-source.js').then(({ WIDGET_JS }) => require('fs').writeFileSync('dev/widget.local.js', WIDGET_JS))\"",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

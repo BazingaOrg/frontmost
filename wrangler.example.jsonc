@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "frontmost",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-16",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "PUBLIC_USER_ID": "bazinga",
+    "OFFLINE_AFTER_SECONDS": "150"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PRESENCE",
+        "class_name": "PresenceActor"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "ICONS",
+      "id": "replace-with-kv-namespace-id"
+    }
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "PresenceActor"
+      ]
+    }
+  ]
+}
