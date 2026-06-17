@@ -1,11 +1,28 @@
 export const WIDGET_JS = String.raw`
 (function () {
   const DEFAULT_ENDPOINT = new URL(document.currentScript?.src || window.location.href).origin;
-  const STYLE = ":host{display:inline-block;font:13px/1.35 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1f2937}.frontmost{display:inline-flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid rgba(31,41,55,.14);border-radius:999px;background:rgba(255,255,255,.86);box-shadow:0 1px 2px rgba(0,0,0,.04)}.icon{width:20px;height:20px;border-radius:5px;object-fit:contain}.offline .icon,.locked .icon,.sleeping .icon{filter:grayscale(1);opacity:.65}.text{display:flex;flex-direction:column;min-width:0}.name{font-weight:600;white-space:nowrap}.meta{color:#6b7280;font-size:11px;white-space:nowrap}.dot{width:7px;height:7px;border-radius:99px;background:#22c55e}.offline .dot{background:#9ca3af}.locked .dot{background:#f59e0b}.sleeping .dot{background:#60a5fa}.placeholder{display:grid;place-items:center;width:20px;height:20px;border-radius:5px;background:#f3f4f6;color:#6b7280;font-size:12px}";
+  const ICON_TRANSITION_MS = 320;
+  const STYLE = [
+    ':host{display:inline-flex;align-items:center;gap:0.45em;vertical-align:middle;color:inherit;font:inherit;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;line-height:1.4;min-width:0}',
+    ':host([hidden]){display:none}',
+    '.frontmost{display:inline-flex;align-items:center;gap:inherit;min-width:0}',
+    '.slot{display:inline-grid;width:var(--frontmost-icon-size,1.35em);height:var(--frontmost-icon-size,1.35em);flex-shrink:0}',
+    '.slot > *{grid-area:1 / 1;width:100%;height:100%;border-radius:var(--frontmost-icon-radius,0.28em);transition:opacity 320ms ease,transform 320ms cubic-bezier(.22,1,.36,1);transform-origin:center;will-change:opacity,transform}',
+    '.icon{object-fit:contain}',
+    '.placeholder{background:color-mix(in srgb,currentColor 10%,transparent)}',
+    '.slot > .entering{opacity:0;transform:scale(0.6)}',
+    '.slot > .leaving{opacity:0;transform:scale(1.18)}',
+    '@media (prefers-reduced-motion: reduce){.slot > *{transition:opacity 160ms ease;transform:none !important}}',
+    '.name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:16em}',
+    '.meta{opacity:0.55;white-space:nowrap}',
+    '.meta:not(:empty)::before{content:"·";padding-right:0.3em}',
+    '.name:empty + .meta::before{content:"";padding-right:0}',
+    '.locked .icon,.locked .placeholder,.sleeping .icon,.sleeping .placeholder,.offline .icon,.offline .placeholder{filter:saturate(0);opacity:0.5}'
+  ].join("");
 
   class FrontmostBadge extends HTMLElement {
     static get observedAttributes() {
-      return ["user", "endpoint", "interval"];
+      return ["user", "endpoint", "interval", "hide-when-offline"];
     }
 
     constructor() {
@@ -121,7 +138,13 @@ export const WIDGET_JS = String.raw`
         return;
       }
 
-      this.shadowRoot.innerHTML = '<style>' + STYLE + '</style><span class="frontmost offline"><span class="slot"><span class="placeholder">今</span></span><span class="dot" aria-hidden="true"></span><span class="text"><span class="name"></span><span class="meta"></span></span></span>';
+      this.shadowRoot.innerHTML =
+        '<style>' + STYLE + '</style>' +
+        '<span class="frontmost offline" part="badge">' +
+        '<span class="slot"><span class="placeholder" part="icon"></span></span>' +
+        '<span class="name" part="name"></span>' +
+        '<span class="meta" part="meta"></span>' +
+        '</span>';
     }
 
     update() {
@@ -129,8 +152,11 @@ export const WIDGET_JS = String.raw`
 
       const state = this.state;
       const status = state?.status || "offline";
-      const name = state?.name || "Not broadcasting";
-      const meta = state?.error || statusText(state, this.receivedAt);
+      const hideWhenOffline = this.hasAttribute("hide-when-offline") && status === "offline" && !state?.error;
+      this.toggleAttribute("hidden", hideWhenOffline);
+
+      const name = state?.name || "";
+      const meta = state?.error || metaText(state, this.receivedAt);
 
       this.shadowRoot.querySelector(".frontmost").className = "frontmost " + status;
       this.shadowRoot.querySelector(".name").textContent = name;
@@ -146,43 +172,76 @@ export const WIDGET_JS = String.raw`
       }
 
       this.currentIconUrl = nextIconUrl;
-      if (!nextIconUrl) {
-        slot.replaceChildren(iconPlaceholder());
-        return;
-      }
 
-      const img = document.createElement("img");
-      img.className = "icon";
-      img.alt = "";
-      img.src = nextIconUrl;
-      img.addEventListener("error", () => {
+      const next = nextIconUrl ? createIconImg(nextIconUrl, () => {
         if (this.currentIconUrl === nextIconUrl) {
-          slot.replaceChildren(iconPlaceholder());
+          replaceWithPlaceholder(next);
         }
-      }, { once: true });
-      slot.replaceChildren(img);
+      }) : iconPlaceholder();
+
+      next.classList.add("entering");
+
+      Array.from(slot.children).forEach(child => {
+        child.classList.remove("entering");
+        child.classList.add("leaving");
+      });
+
+      slot.appendChild(next);
+
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        next.classList.remove("entering");
+      }));
+
+      window.setTimeout(() => {
+        Array.from(slot.children).forEach(child => {
+          if (child !== next) child.remove();
+        });
+      }, ICON_TRANSITION_MS + 60);
     }
   }
 
-  function statusText(state, receivedAt) {
-    if (!state || state.status === "offline") return "offline";
-    if (state.status === "locked") return "locked";
-    if (state.status === "sleeping") return "sleeping";
-    if (!state.lastActivityAt || !state.serverTime) return "active";
-
-    const elapsedSinceFetch = receivedAt ? Math.floor((Date.now() - receivedAt) / 1000) : 0;
-    const seconds = Math.max(0, state.serverTime + elapsedSinceFetch - state.lastActivityAt);
-    if (seconds < 60) return seconds + "s ago";
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return minutes + "m ago";
-    return Math.floor(minutes / 60) + "h ago";
+  function createIconImg(url, onError) {
+    const img = document.createElement("img");
+    img.className = "icon";
+    img.setAttribute("part", "icon");
+    img.alt = "";
+    img.src = url;
+    if (onError) {
+      img.addEventListener("error", onError, { once: true });
+    }
+    return img;
   }
 
   function iconPlaceholder() {
     const placeholder = document.createElement("span");
     placeholder.className = "placeholder";
-    placeholder.textContent = "今";
+    placeholder.setAttribute("part", "icon");
     return placeholder;
+  }
+
+  function replaceWithPlaceholder(node) {
+    if (!node || !node.isConnected) return;
+    const fallback = iconPlaceholder();
+    fallback.className += " " + (node.className.includes("entering") ? "entering" : "");
+    node.replaceWith(fallback);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      fallback.classList.remove("entering");
+    }));
+  }
+
+  function metaText(state, receivedAt) {
+    if (!state) return "";
+    if (state.status === "offline") return "offline";
+    if (state.status === "locked") return "locked";
+    if (state.status === "sleeping") return "sleeping";
+    if (!state.lastActivityAt || !state.serverTime) return "";
+
+    const elapsedSinceFetch = receivedAt ? Math.floor((Date.now() - receivedAt) / 1000) : 0;
+    const seconds = Math.max(0, state.serverTime + elapsedSinceFetch - state.lastActivityAt);
+    if (seconds < 60) return seconds + "s";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + "m";
+    return Math.floor(minutes / 60) + "h";
   }
 
   if (!customElements.get("frontmost-badge")) {

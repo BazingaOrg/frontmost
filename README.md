@@ -111,7 +111,30 @@ If you self-host `widget.js`, pass the Worker endpoint:
 <frontmost-badge user="bazinga" endpoint="https://<your-worker-domain>"></frontmost-badge>
 ```
 
-The badge uses Shadow DOM. Your site controls placement and outer layout; the component controls its internal badge style. For now, customize the look by self-hosting or editing `src/widget-source.js`.
+The badge ships with minimal styling and inherits `color`, `font`, and `line-height` from its host. It renders inline (icon + name + a compact `12s` / `2m` / `locked` / `offline` indicator), without backgrounds, borders, or shadows — your site's typography drives the look.
+
+Attributes:
+
+| Attribute | Default | Purpose |
+| --- | --- | --- |
+| `user` | required | The user id served by your Worker. |
+| `endpoint` | script origin | Override when self-hosting `widget.js`. |
+| `interval` | `5000` (ms) | Poll cadence; clamped to >= 3000. |
+| `hide-when-offline` | off | When set, the host element is hidden (`[hidden]`) while status is `offline`. |
+
+Customize from the host page using CSS custom properties and shadow parts:
+
+```css
+frontmost-badge {
+  --frontmost-icon-size: 1.4em;   /* icon scales with em */
+  --frontmost-icon-radius: 6px;
+}
+frontmost-badge::part(name) { font-weight: 500; }
+frontmost-badge::part(meta) { font-family: ui-monospace, monospace; }
+frontmost-badge::part(icon) { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05); }
+```
+
+For deeper changes (markup, copy), self-host or edit `src/widget-source.js`.
 
 ## Local Development
 
