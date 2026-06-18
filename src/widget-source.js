@@ -2,16 +2,18 @@ export const WIDGET_JS = String.raw`
 (function () {
   const DEFAULT_ENDPOINT = new URL(document.currentScript?.src || window.location.href).origin;
   const ICON_TRANSITION_MS = 320;
+  const PLACEHOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 4 Q11.5 3.8 16.4 4 Q19.8 4 19.8 7.4 Q20 11.5 19.8 15.6 Q19.8 19 16.4 19 Q11.5 19.2 6.6 19 Q3.2 19 3.2 15.6 Q3 11.5 3.2 7.4 Q3.2 4 6.6 4 Z" stroke-width="1.5" opacity="0.22" transform="translate(1.1 1.4)"/><path d="M6.6 4 Q11.5 3.8 16.4 4 Q19.8 4 19.8 7.4 Q20 11.5 19.8 15.6 Q19.8 19 16.4 19 Q11.5 19.2 6.6 19 Q3.2 19 3.2 15.6 Q3 11.5 3.2 7.4 Q3.2 4 6.6 4 Z" fill="currentColor" fill-opacity="0.07" stroke="none"/><path d="M6.6 4 Q11.5 3.8 16.4 4 Q19.8 4 19.8 7.4 Q20 11.5 19.8 15.6 Q19.8 19 16.4 19 Q11.5 19.2 6.6 19 Q3.2 19 3.2 15.6 Q3 11.5 3.2 7.4 Q3.2 4 6.6 4 Z" stroke-width="1.5"/><path d="M8.85 6.85 Q11.25 9.35 13.85 11.95 Q12.75 12.25 12.05 12.35 L14.15 15.55 L12.75 16.15 L10.75 12.95 Q9.85 12.75 9.05 12.75 Q8.85 9.85 8.85 6.85 Z" stroke-width="1.3" opacity="0.32" transform="translate(0.6 0.8)"/><path d="M8.85 6.85 Q11.25 9.35 13.85 11.95 Q12.75 12.25 12.05 12.35 L14.15 15.55 L12.75 16.15 L10.75 12.95 Q9.85 12.75 9.05 12.75 Q8.85 9.85 8.85 6.85 Z" stroke-width="1.3"/></svg>';
   const STYLE = [
     ':host{display:inline-flex;align-items:center;gap:0.45em;vertical-align:middle;color:inherit;font:inherit;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;line-height:1.4;min-width:0}',
     ':host([hidden]){display:none}',
     '.frontmost{display:inline-flex;align-items:center;gap:inherit;min-width:0}',
-    '.slot{display:inline-grid;width:var(--frontmost-icon-size,1.35em);height:var(--frontmost-icon-size,1.35em);flex-shrink:0}',
-    '.slot > *{grid-area:1 / 1;width:100%;height:100%;border-radius:var(--frontmost-icon-radius,0.28em);transition:opacity 320ms ease,transform 320ms cubic-bezier(.22,1,.36,1);transform-origin:center;will-change:opacity,transform}',
+    '.slot{display:inline-grid;width:var(--frontmost-icon-size,1.35em);height:var(--frontmost-icon-size,1.35em);flex-shrink:0;overflow:hidden;border-radius:var(--frontmost-icon-radius,0.28em)}',
+    '.slot > *{grid-area:1 / 1;width:100%;height:100%;border-radius:inherit;transition:opacity 220ms ease-out,transform 320ms cubic-bezier(.22,1,.36,1);will-change:opacity,transform}',
     '.icon{object-fit:contain}',
-    '.placeholder{background:color-mix(in srgb,currentColor 10%,transparent)}',
-    '.slot > .entering{opacity:0;transform:scale(0.6)}',
-    '.slot > .leaving{opacity:0;transform:scale(1.18)}',
+    '.placeholder{display:inline-flex;align-items:center;justify-content:center;opacity:0.6}',
+    '.placeholder svg{width:100%;height:100%;display:block}',
+    '.slot > .entering{opacity:0;transform:translate3d(110%,0,0)}',
+    '.slot > .leaving{opacity:0;transform:translate3d(-110%,0,0)}',
     '@media (prefers-reduced-motion: reduce){.slot > *{transition:opacity 160ms ease;transform:none !important}}',
     '.name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:16em}',
     '.meta{opacity:0.55;white-space:nowrap}',
@@ -141,7 +143,7 @@ export const WIDGET_JS = String.raw`
       this.shadowRoot.innerHTML =
         '<style>' + STYLE + '</style>' +
         '<span class="frontmost offline" part="badge">' +
-        '<span class="slot"><span class="placeholder" part="icon"></span></span>' +
+        '<span class="slot"><span class="placeholder" part="icon">' + PLACEHOLDER_SVG + '</span></span>' +
         '<span class="name" part="name"></span>' +
         '<span class="meta" part="meta"></span>' +
         '</span>';
@@ -216,6 +218,7 @@ export const WIDGET_JS = String.raw`
     const placeholder = document.createElement("span");
     placeholder.className = "placeholder";
     placeholder.setAttribute("part", "icon");
+    placeholder.innerHTML = PLACEHOLDER_SVG;
     return placeholder;
   }
 
