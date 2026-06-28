@@ -1,5 +1,6 @@
 import {
   applyMessage,
+  DEFAULT_OFFLINE_AFTER_SECONDS,
   normalizeMessage,
   publicState
 } from "./presence.js";
@@ -10,12 +11,16 @@ import {
   notFound,
   parsePositiveInt,
   text,
-  unauthorized
+  unauthorized,
+  weakEtag
 } from "./http.js";
+import { getIcon, putIcon } from "./icons.js";
 import { WIDGET_JS } from "./widget-source.js";
 
 const STATE_KEY = "state";
-const MAX_ICON_BYTES = 512 * 1024;
+const WIDGET_ETAG = weakEtag(WIDGET_JS);
+// widget.js is static code; let caches hold it briefly and revalidate via ETag.
+const WIDGET_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=86400";
 
 export class PresenceActor {
   constructor(ctx, env) {
@@ -32,7 +37,7 @@ export class PresenceActor {
 
     if (request.method === "GET" && url.pathname === "/current") {
       const state = await this.ctx.storage.get(STATE_KEY);
-      const offlineAfter = parsePositiveInt(this.env.OFFLINE_AFTER_SECONDS, 150);
+      const offlineAfter = parsePositiveInt(this.env.OFFLINE_AFTER_SECONDS, DEFAULT_OFFLINE_AFTER_SECONDS);
       return json(publicState(state, undefined, offlineAfter), {
         headers: {
           "cache-control": "no-store"
@@ -76,12 +81,18 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/widget.js") {
-      return text(WIDGET_JS, {
-        headers: {
-          "content-type": "application/javascript; charset=utf-8",
-          "cache-control": "no-store"
-        }
-      });
+      const cacheHeaders = {
+        "content-type": "application/javascript; charset=utf-8",
+        "cache-control": WIDGET_CACHE_CONTROL,
+        "etag": WIDGET_ETAG
+      };
+      if (request.headers.get("if-none-match") === WIDGET_ETAG) {
+        return new Response(null, {
+          status: 304,
+          headers: { ...corsHeaders(), "cache-control": WIDGET_CACHE_CONTROL, "etag": WIDGET_ETAG }
+        });
+      }
+      return text(WIDGET_JS, { headers: cacheHeaders });
     }
 
     if (request.method === "POST" && url.pathname === "/update") {
@@ -145,60 +156,6 @@ async function current(request, env) {
   return output;
 }
 
-async function putIcon(request, env, encodedBundleId) {
-  const bundleId = safeDecode(encodedBundleId);
-  if (!isValidBundleId(bundleId)) {
-    return json({ error: "Invalid bundle id." }, { status: 400 });
-  }
-
-  const contentType = request.headers.get("content-type") || "";
-  if (contentType.toLowerCase().split(";")[0].trim() !== "image/png") {
-    return json({ error: "Icon must be image/png." }, { status: 415 });
-  }
-
-  const contentLength = Number.parseInt(request.headers.get("content-length") || "0", 10);
-  if (contentLength > MAX_ICON_BYTES) {
-    return iconSizeError();
-  }
-
-  const body = await request.arrayBuffer();
-  if (body.byteLength === 0 || body.byteLength > MAX_ICON_BYTES) {
-    return iconSizeError();
-  }
-  if (!hasPngSignature(body)) {
-    return json({ error: "Icon body must be PNG bytes." }, { status: 415 });
-  }
-
-  await env.ICONS.put(iconKey(bundleId), body, {
-    metadata: {
-      contentType: "image/png",
-      size: body.byteLength
-    }
-  });
-
-  return json({ ok: true });
-}
-
-async function getIcon(env, encodedBundleId) {
-  const bundleId = safeDecode(encodedBundleId);
-  if (!isValidBundleId(bundleId)) {
-    return json({ error: "Invalid bundle id." }, { status: 400 });
-  }
-
-  const icon = await env.ICONS.get(iconKey(bundleId), "arrayBuffer");
-  if (!icon) {
-    return notFound();
-  }
-
-  return new Response(icon, {
-    headers: {
-      ...corsHeaders(),
-      "content-type": "image/png",
-      "cache-control": "public, max-age=31536000, immutable"
-    }
-  });
-}
-
 function presenceStub(env) {
   const user = env.PUBLIC_USER_ID;
   const id = env.PRESENCE.idFromName(user);
@@ -206,7 +163,7 @@ function presenceStub(env) {
 }
 
 function writeSecret(env) {
-  return env.FRONTMOST_WRITE_SECRET || env.IMA_WRITE_SECRET;
+  return env.FRONTMOST_WRITE_SECRET;
 }
 
 function withCors(response) {
@@ -215,30 +172,4 @@ function withCors(response) {
   next.headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
   next.headers.set("access-control-allow-headers", "authorization, content-type");
   return next;
-}
-
-function iconKey(bundleId) {
-  return `icon:${bundleId}`;
-}
-
-function isValidBundleId(bundleId) {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(bundleId);
-}
-
-function iconSizeError() {
-  return json({ error: "Icon must be between 1 byte and 512 KiB." }, { status: 413 });
-}
-
-function hasPngSignature(body) {
-  const bytes = new Uint8Array(body, 0, Math.min(body.byteLength, 8));
-  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  return signature.every((byte, index) => bytes[index] === byte);
-}
-
-function safeDecode(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return "";
-  }
 }

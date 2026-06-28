@@ -40,6 +40,17 @@ export function parsePositiveInt(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+// Cheap, synchronous content fingerprint (FNV-1a) for a weak ETag — enough to
+// let caches revalidate static assets like widget.js without a build step.
+export function weakEtag(content) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < content.length; index += 1) {
+    hash ^= content.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `W/"${content.length.toString(16)}-${(hash >>> 0).toString(16)}"`;
+}
+
 export function assertBearer(request, secret) {
   if (!secret) {
     return false;
