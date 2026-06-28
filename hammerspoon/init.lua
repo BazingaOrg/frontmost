@@ -2,8 +2,16 @@ local config = {
   endpoint = "https://<your-worker-domain>/update",
   secretService = "frontmost",
   secretAccount = "write-secret",
-  userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+  -- Honest identifier. Make sure Cloudflare WAF/Bot/Browser-Integrity checks are
+  -- disabled for the API hostname, otherwise challenge pages break these posts.
+  userAgent = "frontmost-collector/1.0 (+https://github.com/BazingaOrg/frontmost)"
 }
+
+-- While the screen is locked/asleep macOS makes loginwindow the frontmost app;
+-- skip it so the last real app (and its icon) stays on the badge.
+local LOGINWINDOW_BUNDLE_ID = "com.apple.loginwindow"
+
+local MAX_LOG_BYTES = 1024 * 1024
 
 local uploadedIconsPath = hs.configdir .. "/frontmost-uploaded-icons.json"
 local logPath = hs.configdir .. "/frontmost.log"
@@ -11,7 +19,10 @@ local uploadedIcons = {}
 local secret = nil
 
 local function log(message)
-  local file = io.open(logPath, "a")
+  -- Truncate instead of growing unbounded once the log passes the size cap.
+  local size = hs.fs.attributes(logPath, "size")
+  local mode = (size and size > MAX_LOG_BYTES) and "w" or "a"
+  local file = io.open(logPath, mode)
   if not file then return end
   file:write(os.date("!%Y-%m-%dT%H:%M:%SZ ") .. tostring(message) .. "\n")
   file:close()
@@ -133,6 +144,7 @@ local function reportCurrentApp()
   local bundleId = app:bundleID()
   local name = app:name()
   if not bundleId or not name then return end
+  if bundleId == LOGINWINDOW_BUNDLE_ID then return end
 
   report({ type = "switch", bundleId = bundleId, name = name })
   uploadIcon(bundleId)
@@ -149,12 +161,15 @@ if not secret then
 end
 reportCurrentApp()
 
+-- appWatcher / heartbeatTimer / caffeinateWatcher are intentionally global so
+-- Hammerspoon does not garbage-collect the watchers while they are running.
 appWatcher = hs.application.watcher.new(function(name, event, app)
   if event ~= hs.application.watcher.activated then return end
   if not app then return end
 
   local bundleId = app:bundleID()
   if not bundleId or not name then return end
+  if bundleId == LOGINWINDOW_BUNDLE_ID then return end
 
   report({ type = "switch", bundleId = bundleId, name = name })
   uploadIcon(bundleId)
