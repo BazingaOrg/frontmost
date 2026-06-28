@@ -30,7 +30,7 @@ Paste the returned `id` into `wrangler.jsonc`, then set your public user id:
 
 ```jsonc
 "vars": {
-  "PUBLIC_USER_ID": "bazinga",
+  "PUBLIC_USER_ID": "your-handle",
   "OFFLINE_AFTER_SECONDS": "150"
 }
 ```
@@ -101,14 +101,14 @@ Add this to any page:
 
 ```html
 <script src="https://<your-worker-domain>/widget.js"></script>
-<frontmost-badge user="bazinga"></frontmost-badge>
+<frontmost-badge user="your-handle"></frontmost-badge>
 ```
 
 If you self-host `widget.js`, pass the Worker endpoint:
 
 ```html
 <script src="/assets/frontmost-widget.js"></script>
-<frontmost-badge user="bazinga" endpoint="https://<your-worker-domain>"></frontmost-badge>
+<frontmost-badge user="your-handle" endpoint="https://<your-worker-domain>"></frontmost-badge>
 ```
 
 The badge ships with minimal styling and inherits `color`, `font`, and `line-height` from its host. It renders inline (icon + name + a compact `12s` / `2m` / `locked` / `offline` indicator), without backgrounds, borders, or shadows — your site's typography drives the look.
@@ -132,6 +132,17 @@ frontmost-badge {
 frontmost-badge::part(name) { font-weight: 500; }
 frontmost-badge::part(meta) { font-family: ui-monospace, monospace; }
 frontmost-badge::part(icon) { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05); }
+```
+
+The badge also reflects its live state onto the host element, so you can style or label it (e.g. build your own tooltip) without reaching into the shadow DOM:
+
+| Reflected attribute | When present | Value |
+| --- | --- | --- |
+| `data-status` | always after first poll | `active` / `locked` / `sleeping` / `offline` |
+| `data-app-name` | only while `active` with a known app | the foreground app's name |
+
+```css
+frontmost-badge[data-status="offline"] { opacity: 0.6; }
 ```
 
 For deeper changes (markup, copy), self-host or edit `src/widget-source.js`.
@@ -158,7 +169,7 @@ curl -X POST http://localhost:8787/update \
   -H 'Content-Type: application/json' \
   -d '{"type":"switch","bundleId":"com.apple.Safari","name":"Safari"}'
 
-curl 'http://localhost:8787/current?user=bazinga'
+curl 'http://localhost:8787/current?user=your-handle'
 ```
 
 Test the local widget:

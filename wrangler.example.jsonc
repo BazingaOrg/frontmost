@@ -6,7 +6,7 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
-    "PUBLIC_USER_ID": "bazinga",
+    "PUBLIC_USER_ID": "your-handle",
     "OFFLINE_AFTER_SECONDS": "150"
   },
   "durable_objects": {
